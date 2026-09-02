@@ -1,0 +1,44 @@
+name: Apply siren report icon
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Apply siren icon'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch report icon
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('materials-center/index.html')
+          s=p.read_text(encoding='utf-8')
+          old='''<button class="icon-btn report-btn" title="신고" aria-label="신고" onclick="reportMaterial('${m.id}')">⚑</button>'''
+          new='''<button class="icon-btn report-btn" title="신고" aria-label="신고" onclick="reportMaterial('${m.id}',this)"><svg class="siren-icon" viewBox="0 0 1 1" aria-hidden="true"><path d="M0.2695 0.207 L0.2461 0.2402 L0.2266 0.2773 L0.2129 0.3164 L0.2051 0.3535 L0.2031 0.6387 L0.7949 0.6387 L0.7949 0.3711 L0.7891 0.332 L0.7715 0.2773 L0.752 0.2402 L0.7285 0.207 L0.6875 0.166 L0.6484 0.1387 L0.5859 0.1113 L0.5273 0.0996 L0.4707 0.0996 L0.4121 0.1113 L0.3535 0.1367 L0.3105 0.166 Z"/><path d="M0.0996 0.8066 L0.0996 0.8887 L0.1094 0.8984 L0.8867 0.8984 L0.8945 0.8945 L0.8984 0.8887 L0.8984 0.8066 L0.8906 0.7793 L0.875 0.752 L0.8398 0.7207 L0.8184 0.7109 L0.793 0.7051 L0.2051 0.7051 L0.1797 0.7109 L0.1465 0.7285 L0.1152 0.7637 L0.1074 0.7793 Z"/></svg></button>'''
+          if old not in s:
+              raise SystemExit('report button pattern not found')
+          s=s.replace(old,new,1)
+          marker='.icon-btn:hover{background:#f9fafb}'
+          css='.siren-icon{width:21px;height:21px;display:block;fill:currentColor}.report-btn{color:#222}.report-btn.siren-active{color:#c40000}'
+          if marker in s and '.siren-icon{' not in s:
+              s=s.replace(marker,marker+css,1)
+          s=s.replace('async function reportMaterial(id){','async function reportMaterial(id,button){',1)
+          success='''  if(error){alert("신고 실패: "+error.message);return}
+  alert("신고가 접수되었습니다. 관리자 확인 후 처리됩니다.")'''
+          replacement='''  if(error){alert("신고 실패: "+error.message);return}
+  if(button)button.classList.add("siren-active");
+  alert("신고가 접수되었습니다. 관리자 확인 후 처리됩니다.")'''
+          if success not in s:
+              raise SystemExit('report success pattern not found')
+          s=s.replace(success,replacement,1)
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@github.com'
+          git add materials-center/index.html
+          git diff --cached --quiet || (git commit -m 'Apply siren icon' && git push)
