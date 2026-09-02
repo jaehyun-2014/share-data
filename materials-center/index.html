@@ -21,7 +21,7 @@
 <script>
 const SUPABASE_URL="https://qugdtljqifagaanrelxq.supabase.co";
 const SUPABASE_KEY="sb_publishable_K1mj11BXsdVYBWroata6cg_g9WKcfL4";
-const ADMIN_EMAIL="여기에_관리자_이메일";
+const ADMIN_EMAIL="jh.kim1579@senedu.kr";
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 function isConfigured(){return SUPABASE_KEY&&!SUPABASE_KEY.includes("여기에_")&&SUPABASE_URL.includes("supabase.co")}
 function showConfigError(){const msg="Supabase 연결 설정이 아직 완료되지 않았습니다.";["authMessage","uploadMessage","adminStatus"].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=msg})}
