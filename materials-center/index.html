@@ -20,15 +20,12 @@ main{padding:0 12px;margin:20px auto}
 .card h2{font-size:19px}
 .admin-grid{gap:14px}
 .table-wrap{overflow:visible}
-table{min-width:0;width:100%}
-thead{display:none}
-tbody,tr,td{display:block;width:100%}
-tr{background:#fff;border:1px solid #e4e7ec;border-radius:10px;margin-bottom:12px;padding:10px}
-td{border:0;padding:7px 4px;font-size:14px;word-break:break-word}
-td:nth-child(1)::before{content:"자료";font-weight:700;color:#475467;display:block;margin-bottom:3px}
-td:nth-child(2)::before{content:"작성자";font-weight:700;color:#475467;display:block;margin-bottom:3px}
-td:nth-child(3)::before{content:"날짜";font-weight:700;color:#475467;display:block;margin-bottom:3px}
-td:nth-child(4)::before{content:"관리";font-weight:700;color:#475467;display:block;margin-bottom:6px}
+table{min-width:680px;width:100%}
+thead{display:table-header-group}
+tbody{display:table-row-group}
+tr{display:table-row;background:transparent;border:0;border-radius:0;margin:0;padding:0}
+td{display:table-cell;border-bottom:1px solid #eaecf0;padding:14px;font-size:14px;word-break:normal}
+td::before{content:none!important}
 td button{margin:2px 4px 2px 0}
 }
 
