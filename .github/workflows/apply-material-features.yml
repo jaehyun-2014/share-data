@@ -1,0 +1,20 @@
+name: Apply material center features
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.event.head_commit.message != 'Add favorites trash and edit features'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply features
+        run: python3 .github/scripts/apply_features.py
+      - name: Commit HTML
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add materials-center/index.html
+          git diff --cached --quiet || (git commit -m 'Add favorites trash and edit features' && git push)
