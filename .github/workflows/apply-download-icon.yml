@@ -1,0 +1,35 @@
+name: Apply download icon
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Apply download icon'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replace download icon
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('materials-center/index.html')
+          s=p.read_text(encoding='utf-8')
+          old='>↓</button>'
+          new='><svg class="download-icon" viewBox="0 0 220 220" aria-hidden="true"><path d="M110 14c-10 0-18 8-18 18v86L65 91c-7-7-18-7-25 0s-7 18 0 25l57 57c7 7 19 7 26 0l57-57c7-7 7-18 0-25s-18-7-25 0l-27 27V32c0-10-8-18-18-18zM18 178c-10 0-18 8-18 18v10c0 8 6 14 14 14h192c8 0 14-6 14-14v-10c0-10-8-18-18-18h-18v14H36v-14H18z"/></svg></button>'
+          if old not in s:
+              raise SystemExit('download icon pattern not found')
+          s=s.replace(old,new)
+          marker='.siren-icon{'
+          css='.download-icon{width:22px;height:22px;display:block;fill:currentColor}'
+          if marker in s and '.download-icon{' not in s:
+              s=s.replace(marker,css+marker,1)
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@github.com'
+          git add materials-center/index.html
+          git diff --cached --quiet || (git commit -m 'Apply download icon' && git push)
