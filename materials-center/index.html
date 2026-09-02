@@ -50,7 +50,12 @@ async function deleteMaterial(id){if(!currentUser)return;const m=materials.find(
 function renderNotices(){if(!currentUser){$("noticeList").innerHTML=`<div class="empty">공지사항을 보려면 로그인해주세요.</div>`;$("adminNoticeArea").style.display="none";return}$("adminNoticeArea").style.display=isAdmin()?"block":"none";if(!notices.length){$("noticeList").innerHTML=`<div class="empty">등록된 공지사항이 없습니다.</div>`;return}$("noticeList").innerHTML=notices.map(n=>`<div class="notice"><strong>${escapeHtml(n.title)}</strong><div class="notice-date">${dateText(n.created_at)}</div><div class="notice-content">${escapeHtml(n.content)}</div>${isAdmin()?`<button class="download danger" style="margin-top:12px" onclick="deleteNotice('${n.id}')">삭제</button>`:""}</div>`).join("")}
 async function addNotice(){if(!isAdmin()){alert("관리자만 공지를 작성할 수 있습니다.");return}const title=$("noticeTitle").value.trim(),content=$("noticeText").value.trim();if(!title||!content){$("adminStatus").textContent="공지 제목과 내용을 입력해주세요.";return}$("adminStatus").textContent="등록 중...";const {error}=await supabaseClient.from("notices").insert({title,content,author_id:currentUser.id});if(error){$("adminStatus").textContent="공지 등록 실패: "+error.message;return}$("noticeTitle").value="";$("noticeText").value="";$("adminStatus").textContent="공지가 등록되었습니다.";await loadNotices();renderNotices()}
 async function deleteNotice(id){if(!isAdmin()){alert("관리자만 공지를 삭제할 수 있습니다.");return}if(!confirm("이 공지를 삭제할까요?"))return;const {error}=await supabaseClient.from("notices").delete().eq("id",id);if(error){alert("공지 삭제 실패: "+error.message);return}await loadNotices();renderNotices()}
-supabaseClient.auth.onAuthStateChange(async()=>{await updateAuthUI();await loadAll()});(async()=>{await updateAuthUI();await loadAll()})();
+supabaseClient.auth.onAuthStateChange(()=>{
+  setTimeout(()=>{
+    updateAuthUI();
+    loadAll();
+  },0);
+});
 </script>
 </body>
 </html>
