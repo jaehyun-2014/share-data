@@ -1,0 +1,74 @@
+name: Add material thumbnails
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Apply material thumbnails'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch material thumbnails
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('materials-center/index.html')
+          s = p.read_text(encoding='utf-8')
+
+          # Add a small thumbnail placeholder beside each material title.
+          old = '<strong>${escapeHtml(m.title)}</strong>'
+          new = '<strong>${escapeHtml(m.title)}</strong><span class="material-thumb" data-material-thumb data-storage-path="${encodeURIComponent(m.storage_path||\"\")}" data-file-name="${escapeHtml(m.file_name||\"\")}"></span>'
+          if 'data-material-thumb' not in s:
+              if old not in s:
+                  raise SystemExit('material title pattern not found')
+              s = s.replace(old, new, 1)
+
+          # Add thumbnail CSS.
+          if '.material-thumb{' not in s:
+              marker = '.siren-icon{'
+              css = '.material-thumb{display:inline-flex;width:34px;height:34px;margin-left:9px;vertical-align:middle;border:1px solid #d0d5dd;border-radius:7px;overflow:hidden;background:#f2f4f7;align-items:center;justify-content:center}.material-thumb img{width:100%;height:100%;object-fit:cover;display:block}.material-thumb.empty{display:none}'
+              if marker in s:
+                  s = s.replace(marker, css + marker, 1)
+              else:
+                  s = s.replace('</style>', css + '</style>', 1)
+
+          # Add async signed-URL thumbnail hydration.
+          if 'async function hydrateMaterialThumbs()' not in s:
+              fn = r'''\nasync function hydrateMaterialThumbs(){
+  const els=[...document.querySelectorAll('[data-material-thumb]:not([data-thumb-loaded])')];
+  await Promise.all(els.map(async el=>{
+    el.dataset.thumbLoaded='1';
+    const name=(el.dataset.fileName||'').toLowerCase();
+    const path=decodeURIComponent(el.dataset.storagePath||'');
+    if(!path || !/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(name)){el.classList.add('empty');return}
+    try{
+      const {data,error}=await supabaseClient.storage.from('materials').createSignedUrl(path,3600);
+      if(error||!data?.signedUrl){el.classList.add('empty');return}
+      el.innerHTML=`<img src="${data.signedUrl}" alt="" loading="lazy">`;
+    }catch(e){el.classList.add('empty')}
+  }));
+}
+
+if(document.body){
+  new MutationObserver(()=>hydrateMaterialThumbs()).observe(document.body,{childList:true,subtree:true});
+}
+'''
+              s = s.replace('\nfunction renderHome(){', fn + '\nfunction renderHome(){', 1)
+
+          p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add materials-center/index.html
+          git diff --cached --quiet || (git commit -m 'Apply material thumbnails' && git push)
