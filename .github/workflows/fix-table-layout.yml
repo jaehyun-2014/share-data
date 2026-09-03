@@ -25,6 +25,35 @@ jobs:
               s=re.sub(r'table\\{min-width:0;width:100%\\}\\nthead\\{display:none\\}\\ntbody,tr,td\\{display:block;width:100%\\}\\ntr\\{.*?\\}\\ntd\\{.*?\\}\\ntd:nth-child\\(1\\)::before\\{.*?\\}\\ntd:nth-child\\(2\\)::before\\{.*?\\}\\ntd:nth-child\\(3\\)::before\\{.*?\\}\\ntd:nth-child\\(4\\)::before\\{.*?\\}\\ntd button\\{.*?\\}', new, s, count=1, flags=re.S)
           p.write_text(s,encoding='utf-8')
           PY
+      - name: Fix download behavior
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('materials-center/index.html')
+          s=p.read_text(encoding='utf-8')
+          start=s.find('async function downloadMaterial(id){')
+          end=s.find('\nasync function deleteMaterial(id){', start)
+          if start < 0 or end < 0:
+              raise SystemExit('download function not found')
+          new='''async function downloadMaterial(id){
+  const m=materials.find(x=>x.id===id);if(!m)return;
+  const {data,error}=await supabaseClient.storage.from("materials").createSignedUrl(m.storage_path,300,{download:m.file_name||true});
+  if(error||!data?.signedUrl){alert("파일을 다운로드할 수 없습니다.");return}
+  try{
+    const res=await fetch(data.signedUrl);
+    if(!res.ok)throw new Error("download failed");
+    const blob=await res.blob();
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download=m.file_name||"download";a.style.display="none";
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }catch(e){
+    const a=document.createElement("a");a.href=data.signedUrl;a.download=m.file_name||"download";a.rel="noopener";document.body.appendChild(a);a.click();a.remove();
+  }
+}'''
+          s=s[:start]+new+s[end:]
+          p.write_text(s,encoding='utf-8')
+          PY
       - name: Commit
         run: |
           git config user.name 'github-actions[bot]'
