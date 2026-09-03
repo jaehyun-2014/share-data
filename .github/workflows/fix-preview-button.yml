@@ -1,4 +1,4 @@
-name: Fix preview button duplication
+name: Remove preview button
 
 on:
   push:
@@ -9,12 +9,12 @@ permissions:
 
 jobs:
   fix:
-    if: github.event.head_commit.message != 'Fix duplicate preview button'
+    if: github.event.head_commit.message != 'Remove preview button'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Keep exactly one preview button
+      - name: Remove preview button
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -29,21 +29,11 @@ jobs:
               raise SystemExit('materialRow region not found')
 
           region = s[start:end]
-
-          # Remove every preview button currently inside materialRow.
           region = re.sub(
               r'<button[^>]*class=["\'][^"\']*preview-btn[^"\']*["\'][^>]*>.*?</button>',
               '', region, flags=re.S
           )
 
-          preview = '''<button class="icon-btn preview-btn" title="미리보기" aria-label="미리보기" onclick="previewMaterial('${m.id}')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5C6.5 5 2.2 8.6 1 12c1.2 3.4 5.5 7 11 7s9.8-3.6 11-7c-1.2-3.4-5.5-7-11-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-2.2A1.8 1.8 0 1 0 12 10a1.8 1.8 0 0 0 0 3.6z"/></svg></button>'''
-
-          marker = '<div class="icon-actions">'
-          pos = region.find(marker)
-          if pos == -1:
-              raise SystemExit('icon-actions not found')
-
-          region = region[:pos + len(marker)] + preview + region[pos + len(marker):]
           s = s[:start] + region + s[end:]
           p.write_text(s, encoding='utf-8')
           PY
@@ -53,4 +43,4 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add materials-center/index.html
-          git diff --cached --quiet || (git commit -m 'Fix duplicate preview button' && git push)
+          git diff --cached --quiet || (git commit -m 'Remove preview button' && git push)
