@@ -6,36 +6,36 @@ permissions:
   contents: write
 jobs:
   fix:
-    if: github.event.head_commit.message != 'Fix recent materials mobile clipping'
+    if: github.event.head_commit.message != 'Fix post trash icon correctly'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Fix recent materials mobile clipping
+      - name: Fix post trash icon and mobile layout
         run: |
           python3 - <<'PY'
           import re
           from pathlib import Path
           p=Path('materials-center/index.html')
           s=p.read_text(encoding='utf-8')
-          # Keep the top navigation trash item as text.
+          # Top navigation must remain text.
           s=re.sub(r'<button data-page="trash"[^>]*>.*?</button>', '<button data-page="trash">휴지통</button>', s, count=1, flags=re.S)
-          # Make the recent-materials table scroll horizontally inside the card.
+          # Keep recent-materials table inside a horizontal scroll area.
           css='#recentHome{width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}'
           if '#recentHome{' not in s:
               s=s.replace('</style>',css+'\n</style>',1)
-          # Keep the post delete button as the uploaded trash icon.
-          b64='iVBORw0KGgoAAAANSUhEUgAAANwAAADcCAYAAAAbWs+BAAAEiklEQVR4nO3d3XKbMBSFUbmT93/l9qbpJK4j/x02R7DWTafjpAZVH2CUIZdBpd97b0Chy94bcEQGtcaRQrtmjhQymK87cmQ/MV/eZACfd8bQvjJn3mDwnnP22L4yd17wa+8NWIjYvjMeLxDcY0yu24zLkwR3n0k1Z3yeILg5k+kxxulBgvuZSUQ5wVHFAeoBgrvN5HmNcbtDcBAkuP85SrMZwVHNAWtCcBAkuO8cndmUH0D9rjq4lcb3zPse87H3BhzUipPtc5ud5TfkkrLeirERIjiuOWBsSHAQJDgIEhwECQ6C9v6A7BY0KXvP9THGfhshNPaya3h7XFKKjT3tOv/SwYmNDnabh8ngxEYnu8xHdykhKBWcsxsMZzjOLX4iqLpF+nXDL3f+DispXUbY4gx3HZfY4C+XlBAkOAgSHAQJDoIEB0GCgyDBQZDgIEhwECQ4CBIcBAkOggQHQYKDIMEBAAAAAAAAQJGfnl/5e/La7Pseee0Iz8y8tw+vjs8jr//0Pa+O66vvV/Vvba7Fb4UcTQeH5XWZ3//40S4IEhwEdQmu3akfttAlOJ/hOIUuwcEpCA6CBAdBgoMgwUGQ4CBIcBAkOAgSHAQJDoIEB0GCgyDBQZDgIEhwECQ4CBIcBAkOggQHQR97b0Az7z7MqOLZLBUPVOqwHZ5Tc4MzXK2jPH3sKPvRjuBqOaozJTgIEhwECQ6CBAdBgqvl7h5TgoMgwUGQ4CBIcLUsfDMlOAgSXC13KZkSHAQJDoIEB0GCgyDBQZDgalmHY0pwECS4WtbhmBIcBAkOggQHQYKDIMHVsizAlOAgSHC1LAswJTgIEhwECQ4CBJcLetwTAkOggRXy11KpgQHQYKDIMFBkOBquUvJlOAgSHAQJDoIEB0GCq2VZgCnBQZDgIEhwtazDMSU4CBIcBAkOggRXy7IAU4KDIMFBkOBqWRZgSnAQJDgIEhwECQ6CBFfLOhxTgoMgwdWyLMCU4CBIcBAkOAgSHAQJrpZlAaYEB0GCgyDBQZDgIEhwECQ6CBAdBgoOgLsG1Wy+BLXQJDk5BcBAkOAgSHAQJDoIEx1G1vPPdKbiWAwSVOgUHhyc4jqjt1VK34NoOFFToFhy8q/VBu2NwrQcM3tExuDFEx2vaz5uuwcGz2sc2Ru/glhhAeEbn4MYQHY9ZZp50D26MhQaTXSw1P1YIbozFBpWY5ebFKsGNseDgsqkl58OSGz38LoIzW3XOjjHWOsN9tfSg87Ll/9+X34HhbHcGR5inY4wD7chf4juOo83NMcZBd+qKCPs7wzwEAIAKfwAJtFuHVc3kRwAAAABJRU5ErkJggg=='
-          icon=f'<img class="trash-icon" alt="" src="data:image/png;base64,{b64}">'
+          # Use an inline SVG for post delete buttons so there is no broken image.
+          trash_svg='<svg class="trash-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9zm3 2v8h2v-8H9zm4 0v8h2v-8h-2z"/></svg>'
           pattern=r'(<button[^>]*class="icon-btn icon-danger"[^>]*>)(?:×|<img[^>]*>)(</button>)'
-          s,n=re.subn(pattern, lambda m:m.group(1)+icon+m.group(2), s)
+          s,n=re.subn(pattern, lambda m:m.group(1)+trash_svg+m.group(2), s)
+          css2='.trash-icon{width:22px;height:22px;display:block;fill:currentColor}'
           if '.trash-icon{' not in s:
-              s=s.replace('</style>','.trash-icon{width:21px;height:21px;object-fit:contain;display:block;filter:none}\n</style>',1)
+              s=s.replace('</style>',css2+'\n</style>',1)
           p.write_text(s,encoding='utf-8')
-          print('delete buttons updated:', n)
+          print('post delete buttons updated:',n)
           PY
       - name: Commit fix
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add materials-center/index.html
-          git diff --cached --quiet || (git commit -m 'Fix recent materials mobile clipping' && git push)
+          git diff --cached --quiet || (git commit -m 'Fix post trash icon correctly' && git push)
