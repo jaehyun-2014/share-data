@@ -1,0 +1,77 @@
+name: Enforce strict login
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event.head_commit.message != 'Enforce real login only'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Replace login with real Supabase authentication
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('materials-center/index.html')
+          s = p.read_text(encoding='utf-8')
+
+          start = s.find('async function login(){')
+          if start == -1:
+              start = s.find('function login(){')
+          if start == -1:
+              raise SystemExit('login function not found')
+
+          brace = s.find('{', start)
+          depth = 0
+          end = None
+          for i in range(brace, len(s)):
+              if s[i] == '{':
+                  depth += 1
+              elif s[i] == '}':
+                  depth -= 1
+                  if depth == 0:
+                      end = i + 1
+                      break
+          if end is None:
+              raise SystemExit('login function end not found')
+
+          new_login = '''async function login(){
+            const email = $("email").value.trim().toLowerCase();
+            const password = $("password").value;
+            const msg = $("authMessage");
+
+            if(!/^[^@\\s]+@senedu\\.kr$/i.test(email)){
+              msg.textContent = "학교 이메일(@senedu.kr)만 사용할 수 있습니다.";
+              return;
+            }
+            if(!password){
+              msg.textContent = "비밀번호를 입력하세요.";
+              return;
+            }
+
+            const {error} = await supabaseClient.auth.signInWithPassword({email,password});
+            if(error){
+              msg.textContent = "이메일 또는 비밀번호가 올바르지 않습니다.";
+              return;
+            }
+
+            location.reload();
+          }'''
+
+          s = s[:start] + new_login + s[end:]
+          p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Commit fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add materials-center/index.html
+          git diff --cached --quiet || (git commit -m 'Enforce real login only' && git push)
