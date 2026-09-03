@@ -13,33 +13,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Move thumbnail beside management controls
+      - name: Move thumbnail and fix download
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import re
-
-          p = Path('materials-center/index.html')
-          s = p.read_text(encoding='utf-8')
-
-          # Remove the thumbnail from the title area.
-          s = re.sub(
-              r'(<strong>\$\{escapeHtml\(m\.title\)\}</strong>)<span class="material-thumb"[^>]*></span>',
-              r'\1',
-              s,
-              count=1
-          )
-
-          # Put the thumbnail at the beginning of the management section.
-          marker = '<div class="icon-actions">'
-          thumb = '<span class="material-thumb" data-material-thumb data-storage-path="${encodeURIComponent(m.storage_path||\"\")}" data-file-name="${escapeHtml(m.file_name||\"\")}"></span>'
-          if marker in s and 'data-material-thumb' in s:
-              s = s.replace(marker, marker + thumb, 1)
-
-          p.write_text(s, encoding='utf-8')
+          p=Path('materials-center/index.html')
+          s=p.read_text(encoding='utf-8')
+          s=re.sub(r'(<strong>\$\{escapeHtml\(m\.title\)\}</strong>)<span class="material-thumb"[^>]*></span>',r'\1',s,count=1)
+          marker='<div class="icon-actions">'
+          thumb='<span class="material-thumb" data-material-thumb data-storage-path="${encodeURIComponent(m.storage_path||\"\")}" data-file-name="${escapeHtml(m.file_name||\"\")}"></span>'
+          if marker in s and 'data-material-thumb' in s:s=s.replace(marker,marker+thumb,1)
+          start=s.find('async function downloadMaterial(id){')
+          end=s.find('\nasync function deleteMaterial(id){',start)
+          if start>=0 and end>=0:
+              fn='''async function downloadMaterial(id){\n  const m=materials.find(x=>x.id===id);if(!m)return;\n  const {data,error}=await supabaseClient.storage.from("materials").createSignedUrl(m.storage_path,300,{download:m.file_name||true});\n  if(error||!data?.signedUrl){alert("파일을 다운로드할 수 없습니다.");return}\n  try{\n    const res=await fetch(data.signedUrl);if(!res.ok)throw new Error("download failed");\n    const blob=await res.blob();const url=URL.createObjectURL(blob);\n    const a=document.createElement("a");a.href=url;a.download=m.file_name||"download";a.style.display="none";document.body.appendChild(a);a.click();a.remove();\n    setTimeout(()=>URL.revokeObjectURL(url),1000);\n  }catch(e){\n    const a=document.createElement("a");a.href=data.signedUrl;a.download=m.file_name||"download";a.rel="noopener";document.body.appendChild(a);a.click();a.remove();\n  }\n}'''
+              s=s[:start]+fn+s[end:]
+          p.write_text(s,encoding='utf-8')
           PY
-
       - name: Commit patch
         run: |
           git config user.name 'github-actions[bot]'
