@@ -10,21 +10,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply exact trash icon
+      - name: Fix post buttons and recent table
         run: |
           python3 - <<'PY'
           import re
           from pathlib import Path
           p=Path('materials-center/index.html')
           s=p.read_text(encoding='utf-8')
-          b64='iVBORw0KGgoAAAANSUhEUgAAANwAAADcCAYAAAAbWs+BAAAEiklEQVR4nO3d3XKbMBSFUbmT93/l9qbpJK4j/x02R7DWTafjpAZVH2CUIZdBpd97b0Chy94bcEQGtcaRQrtmjhQymK87cmQ/MV/eZACfd8bQvjJn3mDwnnP22L4yd17wa+8NWIjYvjMeLxDcY0yu24zLkwR3n0k1Z3yeILg5k+kxxulBgvuZSUQ5wVHFAeoBgrvN5HmNcbtDcBAkuP85SrMZwVHNAWtCcBAkuO8cndmUH0D9rjq4lcb3zPse87H3BhzUipPtc5ud5TfkkrLeirERIjiuOWBsSHAQJDgIEhwECQ6C9v6A7BY0KXvP9THGfhshNPaya3h7XFKKjT3tOv/SwYmNDnabh8ngxEYnu8xHdykhKBWcsxsMZzjOLX4iqLpF+nXDL3f+DispXUbY4gx3HZfY4C+XlBAkOAgSHAQJDoIEB0GCgyDBQZDgIEhwECQ4CBIcBAkOggQHQYKDIMEBAAAAAAAAQJGfnl/5e/La7Pseee0Iz8y8tw+vjs8jr//0Pa+O66vvV/Vvba7Fb4UcTQeH5XWZ3//40S4IEhwEdQmu3akfttAlOJ/hOIUuwcEpCA6CBAdBgoMgwUGQ4CBIcBAkOAgSHAQJDoIEB0GCgyDBQZDgIEhwECQ4CBIcBAkOggQHQR97b0Az7z7MqOLZLBUPVOqwHZ5Tc4MzXK2jPH3sKPvRjuBqOaozJTgIEhwECQ6CBAdBgqvl7h5TgoMgwUGQ4CBIcLUsfDMlOAgSXC13KZkSHAQJDoIEB0GCgyDBQZDgalmHY0pwECS4WtbhmBIcBAkOggQHQYKDIMHVsizAlOAgSHC1LAswJTgIEhwECQ4CBJcLetwTAkOggRXy11KpgQHQYKDIMFBkOBquUvJlOAgSHAQJLhalgWYEhwECQ6CBAdBgoMgwdWyDseU4CBIcLUsCzAlOAgSHAQJDoIEB0GCq2VZgCnBQZDgIEhwtazDMSU4CBIcBAkOggRXy7IAU4KDIMFBkOBqWRZgSnAQJDgIEhwECQ6CBFfLOhxTgoMgwdWyLMCU4CBIcBAkOAgSHAQJrpZlAaYEB0GCgyDB1bIOx5TgIEhwECQ6CBAdBgoOgLsG1Wy+BLXQJDk5BcBAkOAgSHAQJDoIEx1G1vPPdKbiWAwSVOgUHhyc4jqjt1VK34NoOFFToFhy8q/VBu2NwrQcM3tExuDFEx2vaz5uuwcGz2sc2Ru/glhhAeEbn4MYQHY9ZZp50D26MhQaTXSw1P1YIbozFBpWY5ebFKsGNseDgsqkl58OSGz38LoIzW3XOjjHWOsN9tfSg87Ll/9+X34HhbHcGR5inY4wD7chf4juOo83NMcZBd+qKCPs7wzwEAIAKfwAJtFuHVc3kRwAAAABJRU5ErkJggg=='
+          # The top navigation item stays as text.
+          s=re.sub(r'<button data-page="trash"[^>]*>.*?</button>', '<button data-page="trash">휴지통</button>', s, count=1, flags=re.S)
+          # The recent-materials table must stay inside the card and scroll horizontally on mobile.
+          if '#recentHome{' not in s:
+              s=s.replace('</style>','#recentHome{width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}\n</style>',1)
+          # Use the supplied trash icon on post management delete buttons.
+          b64='iVBORw0KGgoAAAANSUhEUgAAANwAAADcCAYAAAAbWs+BAAAEiklEQVR4nO3d3XKbMBSFUbmT93/l9qbpJK4j/x02R7DWTafjpAZVH2CUIZdBpd97b0Chy94bcEQGtcaRQrtmjhQymK87cmQ/MV/eZACfd8bQvjJn3mDwnnP22L4yd17wa+8NWIjYvjMeLxDcY0yu24zLkwR3n0k1Z3yeILg5k+kxxulBgvuZSUQ5wVHFAeoBgrvN5HmNcbtDcBAkuP85SrMZwVHNAWtCcBAkuO8cndmUH0D9rjq4lcb3zPse87H3BhzUipPtc5ud5TfkkrLeirERIjiuOWBsSHAQJDgIEhwECQ6C9v6A7BY0KXvP9THGfhshNPaya3h7XFKKjT3tOv/SwYmNDnabh8ngxEYnu8xHdykhKBWcsxsMZzjOLX4iqLpF+nXDL3f+DispXUbY4gx3HZfY4C+XlBAkOAgSHAQJDoIEB0GCgyDBQZDgIEhwECQ4CBIcBAkOggQHQYKDIMEBAAAAAAAAQJGfnl/5e/La7Pseee0Iz8y8tw+vjs8jr//0Pa+O66vvV/Vvba7Fb4UcTQeH5XWZ3//40S4IEhwEdQmu3akfttAlOJ/hOIUuwcEpCA6CBAdBgoMgwUGQ4CBIcBAkOAgSHAQJDoIEB0GCgyDBQZDgIEhwECQ4CBIcBAkOggQHQR97b0Az7z7MqOLZLBUPVOqwHZ5Tc4MzXK2jPH3sKPvRjuBqOaozJTgIEhwECQ6CBAdBgqvl7h5TgoMgwUGQ4CBIcLUsfDMlOAgSXC13KZkSHAQJDoIEB0GCgyDBQZDgalmHY0pwECS4WtbhmBIcBAkOggQHQYKDIMHVsizAlOAgSHC1LAswJTgIEhwECQ4CBJcLetwTAkOggRXy11KpgQHQYKDIMFBkOBquUvJlOAgSHAQJDoIEB0GCq2VZgCnBQZDgIEhwtazDMSU4CBIcBAkOggRXy7IAU4KDIMFBkOBqWRZgSnAQJDgIEhwECQ6CBFfLOhxTgoMgwdWyLMCU4CBIcBAkOAgSHAQJrpZlAaYEB0GCgyDBQZDgIEhwECQ6CBAdBgoOgLsG1Wy+BLXQJDk5BcBAkOAgSHAQJDoIEx1G1vPPdKbiWAwSVOgUHhyc4jqjt1VK34NoOFFToFhy8q/VBu2NwrQcM3tExuDFEx2vaz5uuwcGz2sc2Ru/glhhAeEbn4MYQHY9ZZp50D26MhQaTXSw1P1YIbozFBpWY5ebFKsGNseDgsqkl58OSGz38LoIzW3XOjjHWOsN9tfSg87Ll/9+X34HhbHcGR5inY4wD7chf4juOo83NMcZBd+qKCPs7wzwEAIAKfwAJtFuHVc3kRwAAAABJRU5ErkJggg=='
           icon=f'<img class="trash-icon" alt="" src="data:image/png;base64,{b64}">'
-          pattern=r'<button data-page="trash">.*?</button>'
-          s,n=re.subn(pattern,lambda m:'<button data-page="trash" title="휴지통" aria-label="휴지통">'+icon+'</button>',s,count=1,flags=re.S)
-          if not n: raise SystemExit('trash nav button not found')
-          css='.trash-icon{width:21px;height:21px;object-fit:contain;display:block;filter:none}nav button[data-page="trash"]{display:inline-flex;align-items:center;justify-content:center}'
-          if '.trash-icon{' not in s: s=s.replace('</style>',css+'\n</style>',1)
+          pattern=r'(<button[^>]*class="icon-btn icon-danger"[^>]*>)(?:×|<img[^>]*>)(</button>)'
+          s,n=re.subn(pattern,lambda m:m.group(1)+icon+m.group(2),s)
+          if '.trash-icon{' not in s:
+              s=s.replace('</style>','.trash-icon{width:21px;height:21px;object-fit:contain;display:block;filter:none}\n</style>',1)
           p.write_text(s,encoding='utf-8')
+          print('post delete buttons updated:',n)
           PY
       - name: Commit
         run: |
