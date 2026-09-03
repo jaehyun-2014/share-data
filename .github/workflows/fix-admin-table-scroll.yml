@@ -1,4 +1,4 @@
-name: Fix admin table horizontal scroll
+name: Fix post trash icon
 on:
   push:
     branches: [main]
@@ -6,36 +6,33 @@ permissions:
   contents: write
 jobs:
   fix:
-    if: github.event.head_commit.message != 'Fix admin table horizontal scroll'
+    if: github.event.head_commit.message != 'Apply post trash icon'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Fix admin table and trash icon
+      - name: Replace post trash buttons
         run: |
           python3 - <<'PY'
           import re
           from pathlib import Path
           p=Path('materials-center/index.html')
           s=p.read_text(encoding='utf-8')
-          marker='.admin-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}'
-          addition='.admin-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.admin-grid>div{min-width:0}#adminMaterials,#adminReports{width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}'
-          if marker in s:
-              s=s.replace(marker,addition,1)
-          elif '#adminMaterials,#adminReports' not in s:
-              s=s.replace('</style>',addition+'\n</style>',1)
+          # Navigation: keep the trash page as text.
+          s=re.sub(r'<button data-page="trash"[^>]*>.*?</button>', '<button data-page="trash">휴지통</button>', s, count=1, flags=re.S)
           b64='iVBORw0KGgoAAAANSUhEUgAAANwAAADcCAYAAAAbWs+BAAAEiklEQVR4nO3d3XKbMBSFUbmT93/l9qbpJK4j/x02R7DWTafjpAZVH2CUIZdBpd97b0Chy94bcEQGtcaRQrtmjhQymK87cmQ/MV/eZACfd8bQvjJn3mDwnnP22L4yd17wa+8NWIjYvjMeLxDcY0yu24zLkwR3n0k1Z3yeILg5k+kxxulBgvuZSUQ5wVHFAeoBgrvN5HmNcbtDcBAkuP85SrMZwVHNAWtCcBAkuO8cndmUH0D9rjq4lcb3zPse87H3BhzUipPtc5ud5TfkkrLeirERIjiuOWBsSHAQJDgIEhwECQ6C9v6A7BY0KXvP9THGfhshNPaya3h7XFKKjT3tOv/SwYmNDnabh8ngxEYnu8xHdykhKBWcsxsMZzjOLX4iqLpF+nXDL3f+DispXUbY4gx3HZfY4C+XlBAkOAgSHAQJDoIEB0GCgyDBQZDgIEhwECQ4CBIcBAkOggQHQYKDIMEBAAAAAAAAQJGfnl/5e/La7Pseee0Iz8y8tw+vjs8jr//0Pa+O66vvV/Vvba7Fb4UcTQeH5XWZ3//40S4IEhwEdQmu3akfttAlOJ/hOIUuwcEpCA6CBAdBgoMgwUGQ4CBIcBAkOAgSHAQJDoIEB0GCgyDBQZDgIEhwECQ4CBIcBAkOggQHQR97b0Az7z7MqOLZLBUPVOqwHZ5Tc4MzXK2jPH3sKPvRjuBqOaozJTgIEhwECQ6CBAdBgqvl7h5TgoMgwUGQ4CBIcLUsfDMlOAgSXC13KZkSHAQJDoIEB0GCgyDBQZDgalmHY0pwECS4WtbhmBIcBAkOggQHQYKDIMHVsizAlOAgSHC1LAswJTgIEhwECQ4CBJcLetwTAkOggRXy11KpgQHQYKDIMFBkOBquUvJlOAgSHAQJLhalgWYEhwECQ6CBAdBgoMgwdWyDseU4CBIcLUsCzAlOAgSHAQJDoIEB0GCq2VZgCnBQZDgIEhwtazDMSU4CBIcBAkOggRXy7IAU4KDIMFBkOBqWRZgSnAQJDgIEhwECQ6CBFfLOhxTgoMgwdWyLMCU4CBIcBAkOAgSHAQJrpZlAaYEB0GCgyDB1bIOx5TgIEhwECQ6CBAdBgoOgLsG1Wy+BLXQJDk5BcBAkOAgSHAQJDoIEx1G1vPPdKbiWAwSVOgUHhyc4jqjt1VK34NoOFFToFhy8q/VBu2NwrQcM3tExuDFEx2vaz5uuwcGz2sc2Ru/glhhAeEbn4MYQHY9ZZp50D26MhQaTXSw1P1YIbozFBpWY5ebFKsGNseDgsqkl58OSGz38LoIzW3XOjjHWOsN9tfSg87Ll/9+X34HhbHcGR5inY4wD7chf4juOo83NMcZBd+qKCPs7wzwEAIAKfwAJtFuHVc3kRwAAAABJRU5ErkJggg=='
           icon=f'<img class="trash-icon" alt="" src="data:image/png;base64,{b64}">'
-          pattern=r'<button data-page="trash">.*?</button>'
-          s,n=re.subn(pattern,lambda m:'<button data-page="trash" title="휴지통" aria-label="휴지통">'+icon+'</button>',s,count=1,flags=re.S)
-          if n:
-              css='.trash-icon{width:21px;height:21px;object-fit:contain;display:block;filter:none}nav button[data-page="trash"]{display:inline-flex;align-items:center;justify-content:center}'
-              if '.trash-icon{' not in s:
-                  s=s.replace('</style>',css+'\n</style>',1)
+          # Only buttons beside posts that use the existing danger/delete class.
+          pattern=r'(<button[^>]*class="icon-btn icon-danger"[^>]*>)(?:×|<img[^>]*>)(</button>)'
+          s,n=re.subn(pattern, lambda m:m.group(1)+icon+m.group(2), s)
+          css='.trash-icon{width:21px;height:21px;object-fit:contain;display:block;filter:none}'
+          if '.trash-icon{' not in s:
+              s=s.replace('</style>',css+'\n</style>',1)
           p.write_text(s,encoding='utf-8')
+          print('post trash buttons updated:', n)
           PY
       - name: Commit fix
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add materials-center/index.html
-          git diff --cached --quiet || (git commit -m 'Fix admin table horizontal scroll' && git push)
+          git diff --cached --quiet || (git commit -m 'Apply post trash icon' && git push)
