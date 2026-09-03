@@ -124,15 +124,26 @@ async function updateAuthUI(){
 function updateUploadState(){$("uploadLoginInfo").textContent=currentUser?"로그인됨: "+currentUser.email:"자료를 올리려면 먼저 로그인해야 합니다."}
 
 async function login(){
-  if(!isConfigured()){showConfigError();return}
-  const email=$("email").value.trim(),password=$("password").value,msg=$("authMessage");
-  if(!email||!password){msg.textContent="이메일과 비밀번호를 입력해주세요.";return}
-  msg.textContent="로그인 중...";
-  try{
-    const result=await supabaseClient.auth.signInWithPassword({email,password});
-    if(result.error){msg.textContent="로그인 실패: "+result.error.message;return}
-    msg.textContent="로그인되었습니다.";await updateAuthUI();await loadAll();openPage("home")
-  }catch(e){msg.textContent="로그인 오류: "+(e?.message||String(e))}
+  const email = $("email").value.trim().toLowerCase();
+  const password = $("password").value;
+  const msg = $("authMessage");
+
+  if(!/^[^@\s]+@senedu\.kr$/i.test(email)){
+    msg.textContent = "학교 이메일(@senedu.kr)만 사용할 수 있습니다.";
+    return;
+  }
+  if(!password){
+    msg.textContent = "비밀번호를 입력하세요.";
+    return;
+  }
+
+  const {error} = await supabaseClient.auth.signInWithPassword({email,password});
+  if(error){
+    msg.textContent = "이메일 또는 비밀번호가 올바르지 않습니다.";
+    return;
+  }
+
+  location.reload();
 }
 
 async function signup(){
