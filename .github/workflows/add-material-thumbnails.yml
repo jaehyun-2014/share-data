@@ -21,10 +21,8 @@ jobs:
           p=Path('materials-center/index.html')
           s=p.read_text(encoding='utf-8')
 
-          # Fix only the materialRow template: remove every duplicated thumbnail,
-          # then insert exactly one beside the management controls.
           start=s.find('function materialRow(m){')
-          end=s.find('\nfunction hydrateMaterialThumbs(){',start)
+          end=s.find('\nasync function hydrateMaterialThumbs(){',start)
           if start>=0 and end>=0:
               region=s[start:end]
               region=re.sub(r'<span class="material-thumb"[^>]*></span>','',region)
@@ -34,7 +32,6 @@ jobs:
                   region=region.replace(marker,marker+thumb,1)
               s=s[:start]+region+s[end:]
 
-          # Keep the existing download fix intact.
           start=s.find('async function downloadMaterial(id){')
           end=s.find('\nasync function deleteMaterial(id){',start)
           if start>=0 and end>=0:
