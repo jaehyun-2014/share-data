@@ -10,18 +10,53 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Trim content after closing html tag
+      - name: Trim HTML and add preview
         run: |
           python3 - <<'PY'
           from pathlib import Path
           p=Path('materials-center/index.html')
           s=p.read_text(encoding='utf-8')
+
           marker='</html>'
           i=s.find(marker)
           if i >= 0:
-              clean=s[:i+len(marker)]+'\n'
-              if clean != s:
-                  p.write_text(clean, encoding='utf-8')
+              s=s[:i+len(marker)]+'\n'
+
+          if 'onclick="previewMaterial(' not in s:
+              old='<div class="icon-actions">'
+              new='''<div class="icon-actions">\n  <button class="icon-btn preview-btn" title="미리보기" aria-label="미리보기" onclick="previewMaterial('${m.id}')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5C6.5 5 2.2 8.4 1 12c1.2 3.6 5.5 7 11 7s9.8-3.4 11-7c-1.2-3.6-5.5-7-11-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-2.2A1.8 1.8 0 1 0 12 10a1.8 1.8 0 0 0 0 3.8z"/></svg></button>'''
+              s=s.replace(old,new,1)
+
+          if 'id="previewModal"' not in s:
+              modal='''\n<div id="previewModal" class="preview-modal" aria-hidden="true">\n<div class="preview-backdrop" onclick="closePreview()"></div>\n<div class="preview-dialog" role="dialog" aria-modal="true" aria-labelledby="previewTitle">\n<div class="preview-head"><strong id="previewTitle">미리보기</strong><button class="preview-close" onclick="closePreview()" title="닫기" aria-label="닫기">×</button></div>\n<div id="previewBody" class="preview-body"><div class="empty">불러오는 중...</div></div>\n</div></div>\n'''
+              s=s.replace('</main>',modal+'</main>',1)
+
+          if '.preview-modal{' not in s:
+              css='''.preview-modal{display:none;position:fixed;inset:0;z-index:9999}.preview-modal.open{display:flex;align-items:center;justify-content:center}.preview-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.6)}.preview-dialog{position:relative;width:min(92vw,900px);height:min(88vh,760px);background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.25);display:flex;flex-direction:column}.preview-head{height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid #eaecf0;flex:none}.preview-close{border:0;background:transparent;font-size:28px;color:#475467;width:38px;height:38px;border-radius:8px}.preview-close:hover{background:#f2f4f7}.preview-body{flex:1;min-height:0;overflow:auto;background:#f8fafc;display:flex;align-items:center;justify-content:center;padding:12px}.preview-body iframe{width:100%;height:100%;border:0;background:#fff}.preview-body img{max-width:100%;max-height:100%;object-fit:contain}.preview-body video{max-width:100%;max-height:100%}.preview-body audio{width:min(600px,100%)}.preview-text{width:100%;height:100%;margin:0;background:#fff;padding:18px;white-space:pre-wrap;overflow:auto;font-family:monospace;font-size:13px;color:#222}.preview-error{text-align:center;color:#667085;padding:30px}.preview-error a{display:inline-block;margin-top:14px;background:#1f2937;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none}.preview-btn svg{width:20px;height:20px;fill:currentColor;display:block}@media(max-width:600px){.preview-dialog{width:96vw;height:86vh;border-radius:12px}.preview-head{height:50px}}\n'''
+              s=s.replace('</style>',css+'</style>',1)
+
+          if 'async function previewMaterial(' not in s:
+              js=r'''\nasync function previewMaterial(id){
+const m=materials.find(x=>x.id===id);if(!m)return;
+const modal=$("previewModal"),body=$("previewBody"),title=$("previewTitle");
+title.textContent=m.title||"미리보기";body.innerHTML='<div class="empty">불러오는 중...</div>';modal.classList.add("open");modal.setAttribute("aria-hidden","false");document.body.style.overflow="hidden";
+const {data,error}=await supabaseClient.storage.from("materials").createSignedUrl(m.storage_path,300);
+if(error||!data?.signedUrl){body.innerHTML='<div class="preview-error">파일을 미리 볼 수 없습니다.</div>';return}
+const url=data.signedUrl,name=(m.file_name||"").toLowerCase(),ext=name.includes(".")?name.split(".").pop():"";
+const imageExt=["jpg","jpeg","png","gif","webp","bmp","svg"],videoExt=["mp4","webm","ogg","mov"],audioExt=["mp3","wav","m4a","aac","flac","ogg"],textExt=["txt","csv","md","json","xml","html","css","js"];
+if(ext==="pdf")body.innerHTML=`<iframe src="${url}" title="${escapeHtml(m.title||"PDF 미리보기")}"></iframe>`;
+else if(imageExt.includes(ext))body.innerHTML=`<img src="${url}" alt="${escapeHtml(m.title||"이미지 미리보기")}">`;
+else if(videoExt.includes(ext))body.innerHTML=`<video src="${url}" controls playsinline></video>`;
+else if(audioExt.includes(ext))body.innerHTML=`<audio src="${url}" controls></audio>`;
+else if(textExt.includes(ext)){try{const r=await fetch(url);const text=await r.text();body.innerHTML=`<pre class="preview-text">${escapeHtml(text)}</pre>`}catch(e){body.innerHTML='<div class="preview-error">텍스트 파일을 불러올 수 없습니다.</div>'}}
+else body.innerHTML=`<div class="preview-error">이 파일 형식은 브라우저 미리보기를 지원하지 않습니다.<br><a href="${url}" target="_blank" rel="noopener">파일 열기</a></div>`;
+}
+function closePreview(){const modal=$("previewModal");if(!modal)return;modal.classList.remove("open");modal.setAttribute("aria-hidden","true");$("previewBody").innerHTML="";document.body.style.overflow=""}
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closePreview()});
+'''
+              s=s.replace('</script>',js+'</script>',1)
+
+          p.write_text(s,encoding='utf-8')
           PY
       - name: Commit fix
         run: |
