@@ -1,0 +1,62 @@
+name: Add material comments
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Add material comments'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch comments UI and logic
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('materials-center/index.html')
+          s=p.read_text(encoding='utf-8')
+          if 'id="commentModal"' in s or 'function openComments(id)' in s:
+              print('comments already present')
+              raise SystemExit(0)
+
+          css='''\n.comment-btn{background:#fff;border:1px solid #d0d5dd;border-radius:7px;padding:8px 10px;font-size:13px;color:#344054;white-space:nowrap}.comment-btn:hover{background:#f9fafb}.comment-modal{display:none;position:fixed;inset:0;z-index:10000}.comment-modal.open{display:flex;align-items:center;justify-content:center}.comment-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.6)}.comment-dialog{position:relative;width:min(92vw,720px);height:min(88vh,700px);background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.25);display:flex;flex-direction:column}.comment-head{height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid #eaecf0;flex:none}.comment-close{border:0;background:transparent;font-size:28px;color:#475467;width:38px;height:38px;border-radius:8px}.comment-close:hover{background:#f2f4f7}.comment-body{flex:1;min-height:0;overflow:auto;padding:16px;background:#f8fafc}.comment-item{background:#fff;border:1px solid #e4e7ec;border-radius:10px;padding:13px;margin-bottom:10px}.comment-top{display:flex;align-items:center;justify-content:space-between;gap:8px}.comment-author{font-weight:700;font-size:14px}.comment-date{font-size:12px;color:#98a2b3}.comment-text{margin-top:8px;white-space:pre-wrap;word-break:break-word;line-height:1.55}.comment-actions{display:flex;gap:6px;margin-top:10px}.comment-actions button{background:#fff;border:1px solid #d0d5dd;border-radius:6px;padding:5px 8px;font-size:12px}.comment-actions .comment-report{color:#b42318;border-color:#f0b7b2}.comment-form{padding:12px 16px;border-top:1px solid #eaecf0;background:#fff;flex:none}.comment-form-row{display:flex;gap:8px}.comment-form textarea{resize:vertical;min-height:70px}.comment-submit{flex:0 0 auto;align-self:flex-end}.comment-login-note{text-align:center;color:#667085;padding:20px}.comment-report-form{display:grid;gap:10px}.comment-report-form select,.comment-report-form textarea{width:100%;border:1px solid #d0d5dd;border-radius:8px;padding:10px;font:inherit}.admin-comment-report{border:1px solid #e4e7ec;border-radius:10px;padding:14px;margin-bottom:10px;background:#fff}.admin-comment-report .report-meta{margin:6px 0}.admin-comment-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.admin-comment-actions button{background:#fff;border:1px solid #d0d5dd;border-radius:7px;padding:7px 10px}.admin-comment-actions .danger{border-color:#f0b7b2}\n'''
+          s=s.replace('</style>',css+'</style>',1)
+
+          # Add comment management section to admin page.
+          admin_anchor='<div><h2>자료 신고 관리</h2><div id="adminReports"></div></div>'
+          admin_add=admin_anchor+'<div><h2>댓글 신고 관리</h2><div id="adminCommentReports"></div></div>'
+          if admin_anchor in s:
+              s=s.replace(admin_anchor,admin_add,1)
+
+          # Add comments modal immediately before auth section.
+          auth_anchor='<section id="auth" class="page">'
+          modal='''<section id="commentModal" class="comment-modal" aria-hidden="true"><div class="comment-backdrop" onclick="closeComments()"></div><div class="comment-dialog" role="dialog" aria-modal="true" aria-labelledby="commentTitle"><div class="comment-head"><h2 id="commentTitle">댓글</h2><button class="comment-close" onclick="closeComments()" aria-label="닫기">×</button></div><div id="commentBody" class="comment-body"></div><div id="commentForm" class="comment-form"></div></div></section>\n\n'''
+          if auth_anchor in s:
+              s=s.replace(auth_anchor,modal+auth_anchor,1)
+
+          # Add comment button to each material row's action group.
+          start=s.find('function materialRow(m){')
+          end=s.find('function hydrateMaterialThumbs(){',start)
+          if start!=-1 and end!=-1:
+              region=s[start:end]
+              marker='<div class="icon-actions">'
+              if marker in region:
+                  region=region.replace(marker,marker+'<button class="comment-btn" type="button" onclick="openComments(\''+"'+m.id+'"+'\')">댓글</button>',1)
+                  s=s[:start]+region+s[end:]
+
+          # Inject JS before the final script close.
+          js=r'''\nlet currentCommentMaterialId=null;\n\nfunction commentEscape(v){return escapeHtml(String(v??''))}\n\nasync function openComments(id){\n  currentCommentMaterialId=id;\n  const m=materials.find(x=>x.id===id);\n  const modal=document.getElementById('commentModal');\n  if(!modal)return;\n  document.getElementById('commentTitle').textContent='댓글'+(m?.title?' · '+m.title:'');\n  modal.classList.add('open');modal.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';\n  await loadComments(id);\n}\n\nfunction closeComments(){\n  const modal=document.getElementById('commentModal');if(!modal)return;\n  modal.classList.remove('open');modal.setAttribute('aria-hidden','true');currentCommentMaterialId=null;document.body.style.overflow='';\n}\n\nasync function loadComments(materialId){\n  const body=document.getElementById('commentBody'),form=document.getElementById('commentForm');\n  body.innerHTML='<div class="empty">댓글을 불러오는 중...</div>';\n  const {data,error}=await supabaseClient.from('material_comments').select('*').eq('material_id',materialId).is('deleted_at',null).order('created_at',{ascending:true});\n  if(error){body.innerHTML='<div class="empty">댓글을 불러오지 못했습니다.<br>'+commentEscape(error.message)+'</div>';return}\n  const user=(await supabaseClient.auth.getUser()).data.user;\n  if(!data?.length)body.innerHTML='<div class="empty">아직 댓글이 없습니다.</div>';\n  else body.innerHTML=data.map(c=>{\n    const mine=user&&c.user_id===user.id;\n    return '<div class="comment-item"><div class="comment-top"><span class="comment-author">'+commentEscape(c.author_name||'사용자')+'</span><span class="comment-date">'+new Date(c.created_at).toLocaleString('ko-KR')+'</span></div><div class="comment-text">'+commentEscape(c.content)+'</div><div class="comment-actions">'+(mine?'<button onclick="deleteComment(\\''+c.id+'\\')">삭제</button>':'')+'<button class="comment-report" onclick="reportComment(\\''+c.id+'\\')">신고</button></div></div>';\n  }).join('');\n  if(user){\n    const name=(document.getElementById('userName')?.textContent||'').trim()||user.email?.split('@')[0]||'사용자';\n    form.innerHTML='<div class="comment-form-row"><textarea id="commentInput" maxlength="1000" placeholder="댓글을 입력하세요."></textarea><button class="primary comment-submit" onclick="addComment()">등록</button></div><div id="commentMessage" class="message"></div>';\n  }else form.innerHTML='<div class="comment-login-note">댓글을 작성하려면 로그인해야 합니다.</div>';\n}\n\nasync function addComment(){\n  if(!currentCommentMaterialId)return;\n  const user=(await supabaseClient.auth.getUser()).data.user;if(!user){alert('로그인이 필요합니다.');return}\n  const input=document.getElementById('commentInput');const content=(input?.value||'').trim();if(!content){alert('댓글 내용을 입력하세요.');return}\n  const name=(document.getElementById('userName')?.textContent||'').trim()||user.email?.split('@')[0]||'사용자';\n  const {error}=await supabaseClient.from('material_comments').insert({material_id:currentCommentMaterialId,user_id:user.id,author_name:name,content});\n  if(error){alert('댓글 등록 실패: '+error.message);return}\n  await loadComments(currentCommentMaterialId);\n}\n\nasync function deleteComment(id){\n  if(!confirm('이 댓글을 삭제할까요?'))return;\n  const {error}=await supabaseClient.from('material_comments').update({deleted_at:new Date().toISOString()}).eq('id',id);\n  if(error){alert('댓글 삭제 실패: '+error.message);return}\n  if(currentCommentMaterialId)await loadComments(currentCommentMaterialId);\n}\n\nasync function reportComment(id){\n  const reason=prompt('신고 사유를 입력하세요.\\n예: 스팸/광고, 욕설/비방, 부적절한 내용');\n  if(reason===null)return;\n  const text=reason.trim();if(!text){alert('신고 사유를 입력하세요.');return}\n  const user=(await supabaseClient.auth.getUser()).data.user;if(!user){alert('로그인이 필요합니다.');return}\n  const {error}=await supabaseClient.from('comment_reports').insert({comment_id:id,reporter_id:user.id,reason:text});\n  if(error?.code==='23505'){alert('이미 신고한 댓글입니다.');return}\n  if(error){alert('댓글 신고 실패: '+error.message);return}\n  alert('댓글 신고가 접수되었습니다.');\n}\n\nasync function loadAdminCommentReports(){\n  const box=document.getElementById('adminCommentReports');if(!box)return;\n  const {data,error}=await supabaseClient.from('comment_reports').select('*').order('created_at',{ascending:false});\n  if(error){box.innerHTML='<div class="empty">댓글 신고를 불러오지 못했습니다.<br>'+commentEscape(error.message)+'</div>';return}\n  if(!data?.length){box.innerHTML='<div class="empty">댓글 신고 내역이 없습니다.</div>';return}\n  const ids=[...new Set(data.map(x=>x.comment_id))];\n  const {data:comments}=await supabaseClient.from('material_comments').select('id,material_id,user_id,author_name,content,deleted_at').in('id',ids);\n  const cmap=Object.fromEntries((comments||[]).map(x=>[x.id,x]));\n  box.innerHTML=data.map(r=>{const c=cmap[r.comment_id];return '<div class="admin-comment-report"><strong>'+commentEscape(c?.author_name||'알 수 없음')+'</strong><div class="report-meta">사유: '+commentEscape(r.reason)+'<br>상태: '+commentEscape(r.status)+'<br>신고일: '+new Date(r.created_at).toLocaleString('ko-KR')+'</div><div class="comment-text">'+commentEscape(c?.content||'[삭제된 댓글]')+'</div><div class="admin-comment-actions">'+(r.status==='pending'?'<button onclick="resolveCommentReport(\\''+r.id+'\\',\\'resolved\\')">처리 완료</button><button onclick="resolveCommentReport(\\''+r.id+'\\',\\'dismissed\\')">신고 무시</button>':'')+(c&&!c.deleted_at?'<button class="danger" onclick="adminDeleteComment(\\''+c.id+'\\')">댓글 삭제</button>':'')+'</div></div>'}).join('');\n}\n\nasync function resolveCommentReport(id,status){\n  const {error}=await supabaseClient.from('comment_reports').update({status}).eq('id',id);\n  if(error){alert('처리 실패: '+error.message);return}\n  await loadAdminCommentReports();\n}\n\nasync function adminDeleteComment(id){\n  if(!confirm('이 댓글을 삭제할까요?'))return;\n  const {error}=await supabaseClient.from('material_comments').update({deleted_at:new Date().toISOString()}).eq('id',id);\n  if(error){alert('댓글 삭제 실패: '+error.message);return}\n  await loadAdminCommentReports();\n}\n\ndocument.addEventListener('DOMContentLoaded',()=>{\n  const adminBtn=document.querySelector('[data-page="admin"]');\n  if(adminBtn)adminBtn.addEventListener('click',()=>setTimeout(loadAdminCommentReports,100));\n  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeComments()});\n});\n'''
+          s=s.replace('</script>',js+'</script>',1)
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add materials-center/index.html
+          git diff --cached --quiet || (git commit -m 'Add material comments' && git push)
