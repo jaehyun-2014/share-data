@@ -1,0 +1,65 @@
+name: Finalize comment button fix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event.head_commit.message != 'Finalize comment button fix'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix duplicate comment buttons
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p=Path('materials-center/index.html')
+          s=p.read_text(encoding='utf-8')
+          start=s.find('function materialRow(m){')
+          end=s.find('function hydrateMaterialThumbs(){',start)
+          if start<0 or end<0:
+              raise SystemExit('materialRow region not found')
+          region=s[start:end]
+
+          # Remove every existing comment button from materialRow.
+          region=re.sub(r'<button[^>]*class=["\'][^"\']*comment-btn[^"\']*["\'][^>]*>\s*댓글\s*</button>','',region,flags=re.S|re.I)
+          region=re.sub(r'<button[^>]*onclick=["\'][^"\']*openComments[^"\']*["\'][^>]*>\s*댓글\s*</button>','',region,flags=re.S|re.I)
+
+          # Put exactly one button after the thumbnail.
+          button='<button class="comment-btn" type="button" onclick="window.openComments(\'${m.id}\')">댓글</button>'
+          marker='<span class="material-thumb" data-material-thumb'
+          pos=region.find(marker)
+          if pos<0:
+              marker='<div class="icon-actions">'
+              if marker not in region:
+                  raise SystemExit('material action area not found')
+              region=region.replace(marker,marker+button,1)
+          else:
+              close=region.find('</span>',pos)
+              if close<0:
+                  raise SystemExit('thumbnail span not found')
+              close+=len('</span>')
+              region=region[:close]+button+region[close:]
+
+          s=s[:start]+region+s[end:]
+
+          # Keep only one comments.js loader and place it after Supabase.
+          s=re.sub(r'\s*<script src="comments\.js"></script>','',s)
+          supa='<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>'
+          if supa not in s:
+              raise SystemExit('Supabase script tag not found')
+          s=s.replace(supa,supa+'\n<script src="comments.js"></script>',1)
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add materials-center/index.html
+          git diff --cached --quiet || (git commit -m 'Finalize comment button fix' && git push)
