@@ -1,0 +1,61 @@
+name: Repair comments integration
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.event.head_commit.message != 'Repair comments integration'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Repair
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('materials-center/index.html')
+          s=p.read_text(encoding='utf-8')
+
+          # Ensure the external Supabase script tag is valid.
+          s=re.sub(r'<script src="https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@2">.*?</script>', '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>', s, count=1, flags=re.S)
+
+          # Remove any previously injected inline comments code from the Supabase tag if it survived.
+          s=s.replace('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">\nlet currentCommentMaterialId=null;', '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>\n<script src="comments.js"></script>\n<script>\nlet currentCommentMaterialId=null;') if False else s
+
+          if 'src="comments.js"' not in s:
+              s=s.replace('</head>', '<script src="comments.js"></script>\n</head>', 1)
+
+          if 'id="commentModal"' not in s:
+              modal='''<div id="commentModal" class="comment-modal" aria-hidden="true"><div class="comment-backdrop" onclick="closeComments()"></div><div class="comment-dialog" role="dialog" aria-modal="true"><div class="comment-head"><h2 id="commentTitle">댓글</h2><button class="comment-close" type="button" onclick="closeComments()">×</button></div><div id="commentBody" class="comment-body"></div><div id="commentForm" class="comment-form"></div></div></div>'''
+              s=s.replace('</body>',modal+'\n</body>',1)
+
+          css='''.comment-btn{background:#fff;border:1px solid #d0d5dd;border-radius:7px;padding:8px 10px;font-size:13px;color:#344054;white-space:nowrap}.comment-modal{display:none;position:fixed;inset:0;z-index:10000}.comment-modal.open{display:flex;align-items:center;justify-content:center}.comment-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.6)}.comment-dialog{position:relative;width:min(92vw,720px);height:min(88vh,700px);background:#fff;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.25)}.comment-head{height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid #eaecf0}.comment-close{border:0;background:transparent;font-size:28px;color:#475467;width:38px;height:38px}.comment-body{flex:1;min-height:0;overflow:auto;padding:16px;background:#f8fafc}.comment-item{background:#fff;border:1px solid #e4e7ec;border-radius:10px;padding:13px;margin-bottom:10px}.comment-top{display:flex;justify-content:space-between;gap:8px}.comment-author{font-weight:700}.comment-date{font-size:12px;color:#98a2b3}.comment-text{margin-top:8px;white-space:pre-wrap;word-break:break-word;line-height:1.55}.comment-actions{display:flex;gap:6px;margin-top:10px}.comment-actions button{background:#fff;border:1px solid #d0d5dd;border-radius:6px;padding:5px 8px}.comment-actions .comment-report{color:#b42318;border-color:#f0b7b2}.comment-form{padding:12px 16px;border-top:1px solid #eaecf0;background:#fff}.comment-form-row{display:flex;gap:8px}.comment-form textarea{resize:vertical;min-height:70px}.comment-submit{align-self:flex-end}.comment-login-note{text-align:center;color:#667085;padding:20px}.admin-comment-report{border:1px solid #e4e7ec;border-radius:10px;padding:14px;margin-bottom:10px;background:#fff}.admin-comment-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.admin-comment-actions button{background:#fff;border:1px solid #d0d5dd;border-radius:7px;padding:7px 10px}@media(max-width:600px){.comment-dialog{width:96vw;height:86vh}.comment-form-row{flex-direction:column}.comment-submit{align-self:stretch}}'''
+          if '.comment-btn{' not in s:
+              s=s.replace('</style>',css+'</style>',1)
+
+          # Add a simple button to each material row, immediately before the action container.
+          start=s.find('function materialRow(m){')
+          end=s.find('function hydrateMaterialThumbs(){',start)
+          if start!=-1 and end!=-1:
+              region=s[start:end]
+              if 'openComments(' not in region:
+                  region=region.replace('<div class="icon-actions">','<div class="icon-actions"><button class="comment-btn" type="button" onclick="openComments(\''+"${m.id}"+'\')">댓글</button>',1)
+                  s=s[:start]+region+s[end:]
+
+          # Ensure admin comment reports container exists.
+          if 'id="adminCommentReports"' not in s:
+              s=s.replace('<div><h2>자료 신고 관리</h2><div id="adminReports"></div></div>', '<div><h2>자료 신고 관리</h2><div id="adminReports"></div></div><div><h2>댓글 신고 관리</h2><div id="adminCommentReports"></div></div>',1)
+
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add materials-center/index.html
+          git diff --cached --quiet || (git commit -m 'Repair comments integration' && git push)
