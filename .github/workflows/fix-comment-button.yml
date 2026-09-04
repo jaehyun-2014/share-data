@@ -1,0 +1,65 @@
+name: Fix comment button
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event.head_commit.message != 'Fix duplicate and inactive comment buttons'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix comment button
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('materials-center/index.html')
+          s = p.read_text(encoding='utf-8')
+
+          start = s.find('function materialRow(m){')
+          end = s.find('function hydrateMaterialThumbs(){', start)
+          if start == -1 or end == -1:
+              raise SystemExit('materialRow region not found')
+
+          region = s[start:end]
+
+          # Remove every existing comment button from materialRow.
+          region = re.sub(
+              r'<button[^>]*onclick=["\'][^"\']*(?:openComments|comment|댓글)[^"\']*["\'][^>]*>\s*댓글\s*</button>',
+              '', region, flags=re.I
+          )
+          region = re.sub(
+              r'<button[^>]*class=["\'][^"\']*comment-btn[^"\']*["\'][^>]*>\s*댓글\s*</button>',
+              '', region, flags=re.I
+          )
+
+          # Insert exactly one working button into the action area.
+          button = '<button class="comment-btn" type="button" onclick="window.openComments(\'${m.id}\')">댓글</button>'
+          marker = '<div class="icon-actions">'
+          if marker not in region:
+              raise SystemExit('icon-actions marker not found')
+          region = region.replace(marker, marker + button, 1)
+
+          s = s[:start] + region + s[end:]
+
+          # Ensure comments.js is loaded after Supabase and before the page body.
+          s = re.sub(r'\s*<script src="comments\.js"></script>', '', s)
+          supa = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>'
+          if supa not in s:
+              raise SystemExit('Supabase script tag not found')
+          s = s.replace(supa, supa + '\n<script src="comments.js"></script>', 1)
+
+          p.write_text(s, encoding='utf-8')
+          PY
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add materials-center/index.html
+          git diff --cached --quiet || (git commit -m 'Fix duplicate and inactive comment buttons' && git push)
