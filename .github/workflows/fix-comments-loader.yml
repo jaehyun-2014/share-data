@@ -1,0 +1,51 @@
+name: Fix comments loader
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event.head_commit.message != 'Fix comments loader'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix comments loader and button
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p=Path('materials-center/index.html')
+          s=p.read_text(encoding='utf-8')
+
+          # Remove accidental inline JS from the Supabase loader tag.
+          pattern=r'<script src="https://cdn\.jsdelivr\.net/npm/@supabase/supabase-js@2">.*?</script>'
+          s=re.sub(pattern,'<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>',s,count=1,flags=re.S)
+
+          # Load the comments code as a separate script.
+          if 'src="comments.js"' not in s:
+              s=s.replace('</head>','<script src="comments.js"></script>\n</head>',1)
+
+          # Add a comments button to the material action area.
+          start=s.find('function materialRow(m){')
+          end=s.find('function hydrateMaterialThumbs(){',start)
+          if start!=-1 and end!=-1:
+              region=s[start:end]
+              marker='<div class="icon-actions">'
+              button='<div class="icon-actions"><button class="comment-btn" type="button" onclick="openComments(\'${m.id}\')">댓글</button>'
+              if 'onclick="openComments(\'${m.id}\')"' not in region and marker in region:
+                  region=region.replace(marker,button,1)
+                  s=s[:start]+region+s[end:]
+
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add materials-center/index.html
+          git diff --cached --quiet || (git commit -m 'Fix comments loader' && git push)
